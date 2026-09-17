@@ -1,131 +1,251 @@
-# 🍱 TiffinBox — Tiffin Subscription & Pro-Rated Billing Engine
+# 🍱 TiffinBox — Automated Tiffin Subscriptions & Pro-Rated Billing Engine
 
-A production-ready Flask application built for home-style tiffin (lunch delivery) businesses. Customers subscribe to monthly meal plans and receive hot lunches every weekday (Mon–Fri). Subscribers pause for travel, illness, or festivals and **must not be charged for paused days**. At month-end, the owner generates transparent, mathematically exact pro-rated billing sheets.
+A production-grade web application and automated service built for home-style tiffin (lunch delivery) businesses. Customers subscribe to monthly meal plans and receive freshly cooked lunches every weekday (Monday through Friday). Subscribers pause for travel, illness, or festivals and **must not be charged for paused days**. 
+
+At month-end, the kitchen owner generates transparent, mathematically exact pro-rated billing sheets. The system features a **Customer Self-Service Portal**, an **Automated 9:00 AM Daily Delivery Notification Service** via Gmail SMTP, and a **Mid-Cycle Subscription Transfer Engine** that automatically splits billing by who was served.
 
 ---
 
-## 🎯 The Core Billing Rule
+## 🎯 The Core Billing Engine
 
+### Mathematical Formula
 ```
 billable_days  = delivery weekdays in month − service holidays        ← denominator (month-wide, SAME for every customer)
 delivered_days = billable_days ∩ subscription window − paused dates   ← numerator (per customer)
 amount         = plan_price × delivered_days / billable_days
 ```
 
-### 💡 Why the Denominator is Month-Wide
-If the denominator were each customer's own subscription window, a subscriber joining on the 14th of the month would pay 100% of the full monthly plan for half a month of food. By using the month's total delivery weekdays as the uniform denominator, joining mid-month pro-rates fairly against the full month's capacity.
+### Why the Denominator is Month-Wide
+If the denominator were each customer's own active window, a subscriber joining on the 14th would pay 100% of the monthly price for half a month of meals. By using the month's delivery weekdays as the uniform denominator, mid-month subscriptions pro-rate fairly against the month's total capacity.
 
-### 🛡️ Three Mathematical Guarantees
+### Three Mathematical Guarantees
 1. **Exact Plan Price for Full Months:** When `delivered == billable`, the bill is **strictly** the plan price. Rounding never drifts a full month of ₹3,000 to ₹2,999.98.
-2. **Never Touch a Float for Currency:** All prices and amounts are stored as integer **paise** (`1 Rupee = 100 paise`). Fractions are divided using Python's `Decimal` and quantized with `ROUND_HALF_UP` to whole paise.
-3. **Multiply Before Dividing:** Never round the daily rate and then multiply by days delivered. Multiply `plan_price_paise * delivered_days` first, divide by `billable_days`, and round once at the end.
+2. **Never Touch a Float for Currency:** All prices and amounts are stored as integer **paise** (`1 Rupee = 100 paise`). Currency fractions are computed using Python's `Decimal` and quantized with `ROUND_HALF_UP` to whole paise.
+3. **Multiply Before Dividing:** Avoid premature rounding of daily rates. Multiply `plan_price_paise * delivered_days` first, divide by `billable_days`, and round once at the end.
 
 ---
 
 ## 📅 Set Theory for Dates (`set[date]`)
 
-Dates are modelled as sets of `datetime.date` and combined with pure set operations. A month is $\le 31$ elements, so memory and time are negligible, while classic calendar bugs vanish by construction:
-
-- **Weekends are never in delivery sets:** Pausing Friday $\to$ Monday deducts 2 delivery days, not 4 calendar days.
-- **Set union automatically deduplicates:** Overlapping pauses (e.g. 5th–10th and 8th–12th) cannot double-deduct shared days (8th–10th).
-- **Clipping is natural:** A pause spanning month boundaries (e.g. Jan 28 $\to$ Feb 5) splits cleanly across January and February billing sheets.
-- **Derived Status:** Customer status (`NOT_STARTED | ACTIVE | PAUSED | ENDED`) is a pure derived function `status_on(customer, pauses, on_date)`. No `is_paused` DB flag to desynchronize.
-
----
-
-## 🛡️ The 13 Billing Traps & Test Suite
-
-| # | Trap / Edge Case | Handled Behavior | Unit Test |
-|---|---|---|---|
-| **1** | Full month, no pause | Exactly the plan price (to the paisa) | `test_trap_1_full_month_no_pause_is_exact` |
-| **2** | Pause Fri $\to$ Mon | Exactly 2 days deducted (Fri & Mon), not 4 | `test_trap_2_pause_fri_to_mon_deducts_two_days` |
-| **3** | Pause only on Sat + Sun | ₹0 deducted; bill equals full plan price | `test_trap_3_pause_covering_only_sat_sun` |
-| **4** | Pause Jan 28 $\to$ Feb 5 | Jan bill deducts Jan weekdays; Feb bill deducts Feb weekdays | `test_trap_4_pause_spanning_month_boundary` |
-| **5** | Overlapping pauses (5–10 & 8–12) | Shared days (8–10) deducted only once | `test_trap_5_overlapping_pauses_deduplicate` |
-| **6** | Open-ended pause | Clipped at month-end; earlier months unaffected | `test_trap_6_open_ended_pause_clipped_earlier_unaffected` |
-| **7** | Subscribe on 14th (mid-month) | Pro-rated against month-wide denominator (~half price) | `test_trap_7_mid_month_subscribe_uses_month_wide_denominator` |
-| **8** | Pause dated before start date | Only intersects with active window; never negative | `test_trap_8_pause_before_start_date_never_negative` |
-| **9** | Paused all month | Exactly ₹0.00 | `test_trap_9_paused_all_month_is_zero` |
-| **10** | Feb leap vs non-leap | 21 weekdays (2024 leap) vs 20 weekdays (2023 non-leap) | `test_trap_10_feb_leap_vs_non_leap` |
-| **11** | Service holiday mid-month | Removed from denominator AND numerator; full month still exact | `test_trap_11_holiday_mid_month_exact_full_bill` |
-| **12** | Rounding at `.005` | Integer paise quantized with `ROUND_HALF_UP` | `test_trap_12_rounding_at_half_paise` |
-| **13** | Subscription ended mid-month | Billed only through `end_date` | `test_trap_13_subscription_ended_mid_month` |
+Dates are modelled as discrete sets of `datetime.date` and combined with pure set operations. A month is $\le 31$ elements, making memory and execution instantaneous while eliminating classic calendar bugs:
+- **Weekends are excluded by construction:** Pausing Friday $\to$ Monday deducts 2 delivery days, not 4 calendar days.
+- **Set union automatically deduplicates:** Overlapping pauses (e.g. 5th–10th and 8th–12th) cannot double-deduct shared days.
+- **Natural clipping:** A pause spanning month boundaries (Jan 28 $\to$ Feb 5) clips cleanly into January and February billing sheets.
+- **Derived Status:** Customer status (`NOT_STARTED | ACTIVE | PAUSED | ENDED`) is a pure derived function: `status_on(customer, pauses, on_date)`. No mutable database flags that can desynchronize.
 
 ---
 
-## 🏗️ Architecture & File Layout
+## 🔄 Mid-Cycle Subscription Transfer Feature
 
-```
-├── app.py                  # Flask application factory and HTTP routes
-├── schema.sql              # DDL schema for SQLite
-├── seed_demo.py            # Script to seed realistic demo data
-├── requirements.txt        # Dependencies: flask, pytest
-├── README.md               # Documentation and walkthrough
-├── tiffin/
-│   ├── __init__.py
-│   ├── db.py               # SQLite connection, row factory, PRAGMA foreign_keys
-│   ├── models.py           # Dataclasses: Plan, Customer, Pause, Holiday, BillLine, Status
-│   ├── billing.py          # Pure date-set & Decimal math (Zero Flask/SQLite dependencies!)
-│   ├── repository.py       # SQL queries for plans, subscribers, pauses, holidays, bills
-│   └── validators.py       # Phone normalisation (10-digit 6-9), dates, pause/resume rules
-├── templates/
-│   ├── base.html           # Brand header, navigation bar, flash messages
-│   ├── customers.html      # Roster with search & status filter pills (Active/Paused/Ended)
-│   ├── customer_detail.html# Single customer: live month bill, pause history, pause/resume
-│   ├── subscribe.html      # New subscriber signup form
-│   ├── billing.html        # Month picker, itemized billing table, freeze & unfreeze
-│   ├── plans.html          # Plan management and pricing
-│   └── holidays.html       # Kitchen closure schedule
-├── static/
-│   └── style.css           # Modern design system (warm saffron palette, responsive cards)
-└── tests/
-    ├── test_billing.py     # Pure 13-trap edge-case suite
-    ├── test_validators.py  # Phone normalization and pause rule checks
-    ├── test_repository.py  # SQLite repository and FK integrity tests
-    └── test_app.py         # End-to-end Flask integration tests
-```
+Transfer an active subscription mid-cycle to a new customer (e.g. roommate, friend, colleague taking over the flat):
+1. **Cycle & Plan Carry-Over:**
+   - Outgoing customer's service ends on $T - 1$ (`end_date = transfer_date - 1 day`).
+   - Incoming customer is registered and starts on $T$ (`start_date = transfer_date`), inheriting the original plan and cycle end date.
+   - Any active pause for the outgoing customer is capped at $T - 1$ so the incoming customer starts fresh and active.
+2. **Exact Billing Split:**
+   - Outgoing customer is billed strictly for delivered days from start until $T - 1$.
+   - Incoming customer is billed strictly for delivered days from $T$ to cycle end.
+   - Sum of both delivered days equals total cycle delivered days.
+   - Both customers are linked in audit logs with bidirectional badges on profiles and billing sheets.
 
 ---
 
-## 🚀 Setup & Quick Start
+## 📬 Automated 9:00 AM Delivery Notification Service
 
-### 1. Install Dependencies
+Every morning at 9:00 AM, the background daemon thread queries subscribers due for delivery today:
+- **Eligibility Rules:** Must be a weekday (Mon–Fri), non-holiday, active subscription, and not paused.
+- **Email Delivery:** Dispatched via Gmail SMTP SSL (`smtp.gmail.com:465`) with HTML delivery cards (window 12:00 PM – 1:30 PM, meal plan name, address, customer portal link).
+- **Audit Logging:** Every attempt is recorded in `notification_logs` with status (`sent`, `logged`, or `failed`).
+- **Owner Controls:** Manual "Send Today's Notifications Now" trigger available on `/notifications`.
+
+---
+
+## 🚀 Setup & Installation
+
+### Prerequisites
+- Python 3.10+ (Tested on Python 3.13)
+- SQLite 3
+
+### 1. Clone & Set Up Virtual Environment
 ```bash
-python -m pip install -r requirements.txt
+git clone https://github.com/Swadeshsinghrathore/Tiffin_Subscription.git
+cd Tiffin_Subscription
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment (Windows PowerShell)
+.venv\Scripts\Activate.ps1
+
+# Activate virtual environment (Linux / macOS)
+source .venv/bin/activate
 ```
 
-### 2. Run the Full Test Suite
+### 2. Install Dependencies
 ```bash
-python -m pytest -v
+pip install -r requirements.txt
 ```
-*Expected: 28/28 tests passing (14 billing, 5 validator, 3 repository, 6 app routes).*
+*(Dependencies: `flask>=3.0.0`, `pytest>=8.0.0`)*
 
-### 3. Seed Demo Data (Optional)
+### 3. Configure Environment Variables (`.env`)
+Create a `.env` file in the project root:
+```env
+# Flask Configuration
+SECRET_KEY=tiffin-super-secret-key-2026
+FLASK_DEBUG=1
+
+# Gmail SMTP Email Notification Credentials
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USE_SSL=true
+SMTP_USER=ssrathore.woork@gmail.com
+SMTP_PASSWORD=ztamepzhkxjpploh
+SMTP_FROM=TiffinBox Notifications <ssrathore.woork@gmail.com>
+```
+
+### 4. Initialize Database & Seed Demo Data
 ```bash
+python -c "from tiffin.db import init_db; init_db()"
 python seed_demo.py
 ```
 
-### 4. Run the Web Application
+### 5. Run the Application
 ```bash
-python -m flask --app app run --port 5000
+python app.py
 ```
-Open **`http://127.0.0.1:5000`** in your browser.
+Or with Flask CLI:
+```bash
+flask --app app run --port 5000 --debug
+```
+The server will start at **http://127.0.0.1:5000/**.
 
 ---
 
-## 📱 Phone Normalisation Rules
-Customers are keyed and looked up by their phone number. `normalize_phone` handles diverse input formats:
-- `+91 98765-43210` $\to$ `9876543210`
-- `09876543210` $\to$ `9876543210`
-- `919876543210` $\to$ `9876543210`
-- `98765 43210` $\to$ `9876543210`
+## 🔑 Default Credentials
 
-Requirements: exactly 10 digits starting with **6, 7, 8, or 9**.
+### Kitchen Owner Login
+- **URL:** http://127.0.0.1:5000/login
+- **Username:** `admin`
+- **Password:** `tiffin123`
+
+### Customer Self-Service Portal Login
+- **URL:** http://127.0.0.1:5000/customer/login
+- **Login Key:** Any registered 10-digit customer phone (e.g. `9876543210` for Asha Patel)
 
 ---
 
-## 🔒 Live vs. Frozen Billing Sheets
-- **Live Preview:** While a month is ongoing, `/billing` computes numbers dynamically in real time.
-- **Freeze Invoices:** At month-end, the owner clicks **`Freeze & Finalize Bills`**. This saves a snapshot into the `bills` table with a timestamp.
-- **Immutability:** Once frozen, retroactive edits to customer pauses cannot accidentally rewrite bills the owner has already collected on.
-- **Unfreeze:** The owner can unfreeze anytime to allow live recalculations if adjustments are needed.
+## 🧪 Running Automated Tests
+
+Run the full suite of **52 automated unit and integration tests**:
+```bash
+python -m pytest -v
+```
+
+### Test Breakdown
+- `tests/test_billing.py` (14 tests): Pure date-set math, 13 billing traps, leap year, holidays, rounding.
+- `tests/test_transfer.py` (6 tests): Mid-cycle transfers, cycle carry-over, split pro-rated billing, pause capping, validation errors, and web routes.
+- `tests/test_notifications.py` (7 tests): 9:00 AM delivery logic, holiday/weekend filtering, email rendering, SMTP dispatch logs.
+- `tests/test_customer_portal.py` (6 tests): Customer login by phone, plan switching, self-service pause/resume, subscription cancellation.
+- `tests/test_auth.py` (5 tests): Owner signup, login session, password hashing, logout.
+- `tests/test_app.py` (6 tests): Flask routes, customer lookup, subscription freeze/unfreeze.
+- `tests/test_repository.py` (3 tests): Database constraints, cascade deletes, foreign keys.
+- `tests/test_validators.py` (5 tests): 10-digit Indian phone normalization, dates, pause rules.
+
+---
+
+## 🐛 Debugging Guide
+
+1. **Flask Debugger:** Running with `--debug` or `FLASK_DEBUG=1` provides interactive traceback on exceptions.
+2. **SQLite Database Inspection:**
+   ```bash
+   sqlite3 instance/tiffin.db "SELECT id, name, phone, email, start_date, end_date FROM customers;"
+   sqlite3 instance/tiffin.db "SELECT * FROM subscription_transfers;"
+   sqlite3 instance/tiffin.db "SELECT * FROM notification_logs ORDER BY id DESC LIMIT 5;"
+   ```
+3. **SMTP Connectivity Test:**
+   ```bash
+   python -c "import smtplib; s = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10); s.login('ssrathore.woork@gmail.com', 'ztamepzhkxjpploh'); print('SMTP OK'); s.quit()"
+   ```
+4. **Background Scheduler Status:** Check http://127.0.0.1:5000/notifications to view the live scheduler thread status, next scheduled 9:00 AM dispatch time, and recent dispatch logs.
+
+---
+
+## 📡 Complete List of API Endpoints & Routes
+
+### 1. Public & Marketing Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/` | Luxury SaaS landing page with features, pricing, and portals | Public |
+
+### 2. Owner Authentication Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/login` | Owner login form | Public |
+| `POST` | `/login` | Process owner login credentials (`username`, `password`) | Public |
+| `GET` | `/signup` | Owner signup registration form | Public |
+| `POST` | `/signup` | Create owner account (`username`, `email`, `password`, `business_name`) | Public |
+| `GET` | `/logout` | Sign out owner and clear session | Owner |
+
+### 3. Customer Self-Service Portal Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/customer/login` | Customer login form (lookup by phone) | Public |
+| `POST` | `/customer/login` | Authenticate customer by 10-digit phone | Public |
+| `GET` | `/customer/portal` | Customer dashboard: current meal plan, live bill, pause controls | Customer Session |
+| `POST` | `/customer/portal/pause` | Record customer pause (`start_date`, `end_date`, `reason`) | Customer Session |
+| `POST` | `/customer/portal/resume` | Resume active pause (`resume_date`) | Customer Session |
+| `POST` | `/customer/portal/change-plan` | Switch meal plan (`plan_id`) | Customer Session |
+| `POST` | `/customer/portal/cancel` | Cancel customer subscription (`end_date`) | Customer Session |
+| `POST` | `/customer/portal/reactivate`| Reactivate ended customer subscription | Customer Session |
+| `GET` | `/customer/logout` | Log out of customer portal | Customer Session |
+
+### 4. Owner Customer & Subscription Management
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/customers` | Full customer roster with search (`?q=`) and status filter (`?status=active\|paused\|ended`) | Owner |
+| `GET` | `/customers/new` | New customer subscription form | Owner |
+| `POST` | `/customers/new` | Create customer (`phone`, `name`, `email`, `address`, `plan_id`, `start_date`) | Owner |
+| `GET` | `/customers/<phone>` | Customer detail view: live bill, pause history, status | Owner |
+| `POST` | `/customers/<phone>/pause` | Owner records customer pause (`start_date`, `end_date`, `reason`) | Owner |
+| `POST` | `/customers/<phone>/resume`| Owner resumes customer pause (`resume_date`) | Owner |
+| `POST` | `/customers/<phone>/end` | End customer subscription (`end_date`) | Owner |
+| `POST` | `/customers/<phone>/reactivate`| Reactivate subscription starting today | Owner |
+| `POST` | `/customers/<phone>/plan` | Change customer meal plan (`plan_id`) | Owner |
+
+### 5. Mid-Cycle Subscription Transfer Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/customers/<phone>/transfer` | Transfer form with cycle carryover & split bill preview | Owner |
+| `POST` | `/customers/<phone>/transfer` | Execute transfer (`new_phone`, `new_name`, `new_email`, `new_address`, `transfer_date`, `reason`) | Owner |
+
+### 6. Billing & Financial Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/billing` | Month-end pro-rated billing sheet (`?year=YYYY&month=MM`) | Owner |
+| `POST` | `/billing/freeze` | Freeze month-end bill snapshot into persistent immutable records | Owner |
+| `POST` | `/billing/unfreeze` | Unfreeze snapshot to recalculate dynamically | Owner |
+
+### 7. Kitchen Administration Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/plans` | Meal plans list and pricing | Owner |
+| `POST` | `/plans/new` | Create new meal plan (`code`, `name`, `price_rupees`) | Owner |
+| `POST` | `/plans/<int:plan_id>/toggle`| Activate/deactivate a meal plan | Owner |
+| `GET` | `/holidays` | Kitchen holiday closure calendar | Owner |
+| `POST` | `/holidays/new` | Add scheduled service closure (`day`, `label`) | Owner |
+| `POST` | `/holidays/<day>/delete` | Remove service closure | Owner |
+
+### 8. Delivery Notifications Routes
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/notifications` | Notification dashboard, eligible subscribers today, and dispatch logs | Owner |
+| `POST` | `/notifications/send-today`| Manually trigger today's 9:00 AM delivery notification batch | Owner |
+
+---
+
+## 🔒 Security & Data Integrity
+- **Password Hashing:** Werkzeug `generate_password_hash` with PBKDF2:SHA256.
+- **SQL Injection Prevention:** 100% parameterized SQLite statements via `sqlite3`.
+- **Foreign Key Enforcement:** `PRAGMA foreign_keys = ON` enforced on all SQLite connections.
+- **Session Protection:** Flask signed HTTP-only cookies with secret key.
+- **Transaction Safety:** Transfers, bill freezing, and customer creations use atomic database commits.
