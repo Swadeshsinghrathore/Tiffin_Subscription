@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}My Tiffin Portal — {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <h1>Hello, {{ customer.name }}</h1>
+      <span class="badge {{ customer.status.badge_class }}">
+        <span class="badge-dot"></span>
+        {{ customer.status.label }}
+      </span>
+    </div>
+    <p class="page-subtitle">
+      Registered Mobile: <strong>{{ customer.phone }}</strong>
+      {% if customer.address %} &bull; 📍 {{ customer.address }}{% endif %}
+      &bull; Delivering Mon–Fri
+    </p>
+  </div>
+
+  <div class="page-actions">
+    <a href="{{ url_for('customer_logout') }}" class="btn btn-secondary btn-sm">
+      Sign Out
+    </a>
+  </div>
+</div>
+
+<!-- Active Status Banners -->
+{% if customer.status.value == 'paused' %}
+  <div class="alert alert-warning" style="margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+      <span style="font-size: 16px;">⏸️</span>
+      <div>
+        <strong>Your tiffin delivery is currently paused.</strong>
+        {% if open_pause and open_pause.reason %}
+          <div style="font-size: 12px; margin-top: 2px;">Reason: {{ open_pause.reason }} (Since {{ open_pause.start_date.strftime('%b %d, %Y') }})</div>
+        {% endif %}
+      </div>
+    </div>
+    {% if open_pause %}
+      <form action="{{ url_for('customer_portal_resume') }}" method="POST" style="margin-left: 12px;">
+        <input type="hidden" name="pause_id" value="{{ open_pause.id }}">
+        <input type="hidden" name="resume_date" value="{{ today_iso }}">
+        <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Resume your tiffin deliveries starting today?');">
+          ▶ Resume Delivery Now
+        </button>
+      </form>
+    {% endif %}
+  </div>
+{% elif customer.status.value == 'ended' %}
+  <div class="alert alert-danger" style="margin-bottom: 20px;">
+    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+      <span style="font-size: 16px;">🛑</span>
+      <div>
+        <strong>Your subscription has ended.</strong>
+        <div style="font-size: 12px; margin-top: 2px;">Deliveries concluded on {{ customer.end_date.strftime('%b %d, %Y') if customer.end_date else 'N/A' }}.</div>
+      </div>
+    </div>
+    <form action="{{ url_for('customer_portal_reactivate') }}" method="POST" style="margin-left: 12px;">
+      <button type="submit" class="btn btn-primary btn-sm">
+        🚀 Reactivate Subscription
+      </button>
+    </form>
+  </div>
+{% else %}
+  <div class="guarantee-banner" style="margin-top: 0; margin-bottom: 20px;">
+    <span style="font-size: 14px;">🥗</span>
+    <div>
+      <strong>Delivery Active:</strong> Your delicious home-style lunch is scheduled for delivery every Monday through Friday. When you travel or fast, pause below to pay only for days delivered.
+    </div>
+  </div>
+{% endif %}
+
+{% if customer.transferred_to %}
+  <div class="alert alert-info" style="margin-bottom: 20px; display: flex; align-items: center; gap: 12px; background: #F0F9FF; border: 1px solid #BAE6FD; color: #0369A1; border-radius: 8px; padding: 12px 16px;">
+    <span style="font-size: 18px;">🔄</span>
+    <div style="font-size: 13px;">
+      <strong>Subscription Transferred:</strong> You handed over this subscription to
+      <strong>{{ customer.transferred_to.to_customer_name }}</strong> effective {{ customer.transferred_to.transfer_date.strftime('%B %d, %Y') }}.
+      Your bill pro-rates strictly to your delivered days.
+    </div>
+  </div>
+{% endif %}
+
+{% if customer.transferred_from %}
+  <div class="alert alert-success" style="margin-bottom: 20px; display: flex; align-items: center; gap: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; border-radius: 8px; padding: 12px 16px;">
+    <span style="font-size: 18px;">📥</span>
+    <div style="font-size: 13px;">
+      <strong>Subscription Inherited:</strong> You took over this subscription from
+      <strong>{{ customer.transferred_from.from_customer_name }}</strong> effective {{ customer.transferred_from.transfer_date.strftime('%B %d, %Y') }}.
+      Your meal plan and billing cycle carried over seamlessly.
+    </div>
+  </div>
+{% endif %}
+
+<div class="detail-grid">
+  <!-- Left Column: Meal Plan, Pause Management & History -->
+  <div>
+    <!-- Meal Plan Management & Switching Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">My Meal Plan</h3>
+        <span class="badge badge-active">{{ customer.plan.name if customer.plan else 'Standard' }}</span>
+      </div>
+      <div class="card-body">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">
+              {{ customer.plan.name if customer.plan else 'Standard' }}
+            </div>
+            <div style="color: var(--text-muted); font-size: 13px;">
+              {{ customer.plan.monthly_price_formatted if customer.plan else '' }}/month (Mon–Fri Lunch)
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 12px; color: var(--text-muted);">Member Since</div>
+            <div style="font-weight: 600; font-size: 13px;">{{ customer.start_date.strftime('%b %d, %Y') }}</div>
+          </div>
+        </div>
+
+        <!-- Plan Switcher -->
+        <form action="{{ url_for('customer_portal_change_plan') }}" method="POST" style="border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <label class="form-label" style="margin-bottom: 8px;">Switch to a Different Meal Plan:</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
+            {% for p in active_plans %}
+              <label style="border: 1px solid {% if customer.plan and customer.plan.id == p.id %}var(--brand-primary){% else %}var(--border-subtle){% endif %}; background: {% if customer.plan and customer.plan.id == p.id %}var(--brand-light){% else %}#FFFFFF{% endif %}; border-radius: var(--radius-sm); padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span style="font-weight: 600; font-size: 13px;">{{ p.name }}</span>
+                  <input type="radio" name="plan_id" value="{{ p.id }}" {% if customer.plan and customer.plan.id == p.id %}checked{% endif %} style="accent-color: var(--brand-primary);">
+                </div>
+                <span style="font-size: 12px; color: var(--text-muted);">{{ p.monthly_price_formatted }}/mo</span>
+              </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">
+            Update Meal Plan
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Pause Tiffin Delivery Card -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Pause Tiffin Delivery</h3>
+      </div>
+      <div class="card-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
+          Planning a trip or festival? Enter pause dates below. Weekends and kitchen holidays are never double-deducted, and your bill is pro-rated automatically.
+        </p>
+
+        <form action="{{ url_for('customer_portal_pause') }}" method="POST">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="start_date">
+                Pause Start Date <span class="required">*</span>
+              </label>
+              <input
+                type="date"
+                id="start_date"
+                name="start_date"
+                value="{{ today_iso }}"
+                class="form-control"
+                required
+              >
+              <span class="form-text">First day you will NOT receive tiffin.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="end_date">
+                Pause End Date (Inclusive)
+              </label>
+              <input
+                type="date"
+                id="end_date"
+                name="end_date"
+                class="form-control"
+              >
+              <span class="form-text">Last paused day. Delivery resumes the next weekday.</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" name="is_open_ended" value="1" id="is_open_ended" onchange="toggleEndDate(this)" style="accent-color: var(--brand-primary);">
+              <span>Open-ended pause (I don't know my return date yet; I will resume manually)</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="reason">Reason (Optional)</label>
+            <input
+              type="text"
+              id="reason"
+              name="reason"
+              placeholder="e.g. Travel, Family visit, Navratri fasting"
+              class="form-control"
+            >
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">
+            ⏸️ Submit Delivery Pause
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Pause History -->
+    <div class="table-container">
+      <div class="table-header-bar">
+        <h3 class="table-title">My Delivery Pauses</h3>
+        <span class="table-formula">{{ pauses | length }} recorded</span>
+      </div>
+
+      {% if pauses %}
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pauses %}
+                <tr>
+                  <td><strong>{{ p.start_date.strftime('%b %d, %Y') }}</strong></td>
+                  <td>
+                    {% if p.end_date %}
+                      {{ p.end_date.strftime('%b %d, %Y') }}
+                    {% else %}
+                      <span class="badge badge-paused">Open-Ended</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if p.is_open %}
+                      <span class="badge badge-paused">Active Pause</span>
+                    {% else %}
+                      <span class="badge badge-ended">Closed</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ p.reason or '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px;">
+          No pauses recorded yet. Every scheduled delivery day this month will be served!
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Cancel Subscription -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="color: var(--state-danger);">End My Subscription</h3>
+      </div>
+      <div class="card-body">
+        {% if customer.end_date %}
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            Your subscription is scheduled to end on <strong>{{ customer.end_date.strftime('%b %d, %Y') }}</strong>.
+          </p>
+          <form action="{{ url_for('customer_portal_reactivate') }}" method="POST">
+            <button type="submit" class="btn btn-primary btn-sm">
+              Keep My Subscription Active
+            </button>
+          </form>
+        {% else %}
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            Need to stop service? Choose your last delivery date. Meals served up through that date will be billed pro-rata.
+          </p>
+          <form action="{{ url_for('customer_portal_cancel') }}" method="POST" style="display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap;">
+            <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+              <label class="form-label">Final Delivery Date</label>
+              <input type="date" name="end_date" value="{{ today_iso }}" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Confirm cancellation of your monthly tiffin subscription?');">
+              End Subscription
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Live Month Bill Breakdown -->
+  <div>
+    <div class="bill-breakdown-card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div>
+          <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--brand-primary); letter-spacing: 0.05em;">
+            My Live Bill
+          </span>
+          <h3 style="font-size: 15px; margin-top: 2px;">{{ current_month_name }} {{ current_bill.year }}</h3>
+        </div>
+        {% if current_bill.delivered_days == current_bill.billable_days and current_bill.billable_days > 0 %}
+          <span class="badge badge-active">Full Month</span>
+        {% else %}
+          <span class="badge badge-live">Pro-Rated</span>
+        {% endif %}
+      </div>
+
+      <div class="breakdown-row">
+        <span>Monthly Plan Base</span>
+        <strong>{{ current_bill.plan_price_formatted }}</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Kitchen Delivery Weekdays</span>
+        <strong>{{ current_bill.billable_days }} days</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Days Paused</span>
+        <span style="color: var(--state-warning); font-weight: 600;">-{{ current_bill.paused_days }} days</span>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Lunches Delivered</span>
+        <strong style="color: var(--state-success);">{{ current_bill.delivered_days }} days</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Effective Daily Rate</span>
+        <span>{{ current_bill.daily_rate_formatted }} / day</span>
+      </div>
+
+      <div class="breakdown-row total">
+        <span>Month-End Total</span>
+        <span class="amount">{{ current_bill.amount_formatted }}</span>
+      </div>
+
+      <div style="margin-top: 12px; font-size: 11px; color: var(--text-muted); background: var(--bg-page); padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+        Formula: <code>{{ current_bill.plan_price_formatted }} &times; {{ current_bill.delivered_days }} &divide; {{ current_bill.billable_days }}</code>
+      </div>
+    </div>
+
+    <!-- Quick Help & Kitchen Info -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Tiffin Guidelines</h3>
+      </div>
+      <div class="card-body" style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+        <p style="margin-bottom: 8px;">
+          🥗 <strong>Delivery Window:</strong> 12:00 PM – 1:30 PM, Monday through Friday.
+        </p>
+        <p style="margin-bottom: 8px;">
+          ⏱️ <strong>Pause Cutoff:</strong> Pauses should be logged before 9:00 AM on the day of delivery.
+        </p>
+        <p style="margin-bottom: 0;">
+          💡 <strong>Fair Pro-Rata:</strong> Weekend pauses do not reduce weekdays, and service holidays are free for everyone.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleEndDate(checkbox) {
+    var endInput = document.getElementById('end_date');
+    if (checkbox.checked) {
+      endInput.value = '';
+      endInput.disabled = true;
+    } else {
+      endInput.disabled = false;
+    }
+  }
+</script>
+{% endblock %}

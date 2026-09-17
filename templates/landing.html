@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}TiffinBox — Automated Tiffin Subscriptions & Pro-Rated Billing Engine{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+  <div class="hero-pill">
+    <span>🍱</span> Mathematical Tiffin Billing Engine
+  </div>
+  
+  <h1 class="hero-title">
+    Automate Weekday Tiffin Subscriptions with Exact Pro-Rata Invoicing
+  </h1>
+
+  <p class="hero-subtitle">
+    Deliver lunch every weekday to monthly subscribers. When customers pause for travel or festivals,
+    deduct only actual weekdays with zero floating-point errors. Look up customers by phone in milliseconds.
+  </p>
+
+  <div class="hero-cta-group">
+    {% if current_customer %}
+      <a href="{{ url_for('customer_portal') }}" class="btn btn-primary btn-lg">
+        Go to My Tiffin Portal &rarr;
+      </a>
+      <a href="{{ url_for('customer_logout') }}" class="btn btn-secondary btn-lg">
+        Sign Out
+      </a>
+    {% elif current_owner %}
+      <a href="{{ url_for('customers_roster') }}" class="btn btn-primary btn-lg">
+        Go to Dashboard &rarr;
+      </a>
+      <a href="{{ url_for('billing_sheet') }}" class="btn btn-secondary btn-lg">
+        View Billing Sheet
+      </a>
+    {% else %}
+      <a href="{{ url_for('customer_login') }}" class="btn btn-primary btn-lg">
+        👤 Customer Portal Login
+      </a>
+      <a href="{{ url_for('owner_login') }}" class="btn btn-secondary btn-lg">
+        Kitchen Owner Portal
+      </a>
+    {% endif %}
+  </div>
+
+  <div class="trust-badges">
+    <div class="trust-badge-item">
+      <span style="color: var(--state-success); font-weight: 700;">✓</span> 100% Integer Paise Precision
+    </div>
+    <div class="trust-badge-item">
+      <span style="color: var(--state-success); font-weight: 700;">✓</span> Fri &rarr; Mon Deducts 2 Days (Not 4)
+    </div>
+    <div class="trust-badge-item">
+      <span style="color: var(--state-success); font-weight: 700;">✓</span> Month-Wide Fair Denominator
+    </div>
+    <div class="trust-badge-item">
+      <span style="color: var(--state-success); font-weight: 700;">✓</span> 10-Digit Phone Lookup
+    </div>
+  </div>
+
+  <!-- Subscriber Quick Phone Access Box -->
+  <div style="margin-top: 24px; max-width: 460px; margin-left: auto; margin-right: auto; background: #FFFFFF; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 16px; text-align: left;">
+    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--brand-primary); letter-spacing: 0.04em; display: block; margin-bottom: 6px;">
+      Subscriber Instant Access
+    </span>
+    <form action="{{ url_for('customer_login') }}" method="POST" id="quick-login-form" style="display: flex; gap: 8px;">
+      <input type="tel" id="quick-phone" name="phone" placeholder="Enter your 10-digit mobile number..." class="form-control" style="font-size: 13px;" required>
+      <button type="submit" class="btn btn-primary btn-sm" style="white-space: nowrap;">
+        Open Portal &rarr;
+      </button>
+    </form>
+    <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+      Try demo:
+      <a href="javascript:void(0)" onclick="quickPhone('9876543210');" style="color: var(--brand-primary); font-weight: 600;">Asha (9876543210)</a> &bull;
+      <a href="javascript:void(0)" onclick="quickPhone('9988776655');" style="color: var(--brand-primary); font-weight: 600;">Vikram (9988776655)</a>
+    </div>
+  </div>
+</section>
+
+<!-- Interactive Live Billing Calculator Simulator -->
+<section class="calculator-card">
+  <div class="calculator-header">
+    <span class="badge badge-live" style="margin-bottom: 6px;">Live Interactive Simulator</span>
+    <h2>Experience the Exact Pro-Rating Rule</h2>
+    <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+      Adjust plan price and pause days to watch the pro-rated bill compute in real-time.
+    </p>
+  </div>
+
+  <div class="calculator-controls">
+    <div>
+      <label class="form-label" for="sim-plan">
+        Monthly Plan Price: <strong id="sim-plan-label" style="color: var(--brand-primary);">₹3,000</strong>
+      </label>
+      <input type="range" id="sim-plan" min="1500" max="6000" step="100" value="3000" style="width: 100%; accent-color: var(--brand-primary);">
+      
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px;">
+        <span>₹1,500</span>
+        <span>₹3,000</span>
+        <span>₹6,000</span>
+      </div>
+    </div>
+
+    <div>
+      <label class="form-label" for="sim-paused">
+        Weekdays Paused: <strong id="sim-paused-label" style="color: var(--state-warning);">3 days</strong>
+      </label>
+      <input type="range" id="sim-paused" min="0" max="22" step="1" value="3" style="width: 100%; accent-color: var(--state-warning);">
+      
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px;">
+        <span>0 days (Full Month)</span>
+        <span>10 days</span>
+        <span>22 days</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-display">
+    <div>
+      <div class="calc-result-title">Pro-Rated Month-End Bill</div>
+      <div class="calc-result-amount" id="sim-total-amount">₹2,590.91</div>
+      <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">
+        Delivered: <strong id="sim-delivered-count" style="color: #4ADE80;">19</strong> of <strong id="sim-billable-count">22</strong> weekdays
+      </div>
+    </div>
+
+    <div style="background: rgba(255, 255, 255, 0.08); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.12); font-size: 12px; max-width: 320px;">
+      <div style="color: #FBBF24; font-weight: 600; margin-bottom: 2px;">Formula:</div>
+      <code id="sim-formula" style="color: white; font-family: monospace; font-size: 13px;">₹3,000 &times; 19 &divide; 22</code>
+      <div style="color: #94A3B8; font-size: 11px; margin-top: 4px;">
+        Guaranteed: If delivered == billable, amount is strictly full price.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Feature Deep-Dive Grid -->
+<div class="page-header" style="margin-bottom: 16px;">
+  <div>
+    <h2>Features Built for Tiffin Operations</h2>
+    <p class="page-subtitle">Eliminates the errors and arguments common with spreadsheets</p>
+  </div>
+</div>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="feature-icon-box">🛡️</div>
+    <h3>Month-Wide Fair Denominator</h3>
+    <p>
+      Joining mid-month on the 14th divides by the full month's delivery days, never overcharging for half a month of food.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-icon-box">📅</div>
+    <h3>Fri &rarr; Mon Deduplication</h3>
+    <p>
+      Delivery occurs Monday through Friday. Pausing Friday to Monday deducts only 2 weekdays, not 4 calendar days.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-icon-box">🔄</div>
+    <h3>Overlapping Pause Union</h3>
+    <p>
+      Subscribers taking multiple overlapping leaves have dates combined via set union. Shared days are never double-deducted.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-icon-box">📞</div>
+    <h3>10-Digit Phone Keyed Lookup</h3>
+    <p>
+      Normalises <code>+91</code>, spaces, and leading zeros. Look up customer subscriptions and pause history in one click.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-icon-box">🔒</div>
+    <h3>Immutable Frozen Invoices</h3>
+    <p>
+      Freeze month-end billing sheets with one click. Subsequent pause edits will never alter an already issued bill.
+    </p>
+  </div>
+
+  <div class="feature-card">
+    <div class="feature-icon-box">🏖️</div>
+    <h3>Kitchen Closure Holidays</h3>
+    <p>
+      Service holidays for festivals are deducted from both numerator and denominator without distorting rates.
+    </p>
+  </div>
+</div>
+
+<!-- Bottom Call to Action -->
+<div class="card" style="text-align: center; padding: 32px 24px;">
+  <h2 style="font-size: 20px; margin-bottom: 8px;">
+    Start Managing Your Tiffin Subscriptions
+  </h2>
+  <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+    Eliminate billing disputes with mathematically exact pro-rated billing.
+  </p>
+  <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+    <a href="{{ url_for('owner_signup') }}" class="btn btn-primary">
+      Create Kitchen Account
+    </a>
+    <a href="{{ url_for('owner_login') }}" class="btn btn-secondary">
+      Login with Demo Account
+    </a>
+  </div>
+</div>
+
+<script>
+  // Real-time client-side billing simulator matching exact backend Decimal ROUND_HALF_UP logic
+  const planSlider = document.getElementById('sim-plan');
+  const pausedSlider = document.getElementById('sim-paused');
+  const planLabel = document.getElementById('sim-plan-label');
+  const pausedLabel = document.getElementById('sim-paused-label');
+  const totalAmount = document.getElementById('sim-total-amount');
+  const deliveredCount = document.getElementById('sim-delivered-count');
+  const billableCount = document.getElementById('sim-billable-count');
+  const formulaElem = document.getElementById('sim-formula');
+
+  const TOTAL_BILLABLE_DAYS = 22; // Typical delivery weekdays in a month
+
+  function updateSimulator() {
+    const planPrice = parseInt(planSlider.value, 10);
+    const pausedDays = parseInt(pausedSlider.value, 10);
+
+    planLabel.textContent = '₹' + planPrice.toLocaleString('en-IN');
+    pausedLabel.textContent = pausedDays + (pausedDays === 1 ? ' day' : ' days');
+
+    const delivered = Math.max(0, TOTAL_BILLABLE_DAYS - pausedDays);
+    deliveredCount.textContent = delivered;
+    billableCount.textContent = TOTAL_BILLABLE_DAYS;
+
+    // Integer paise math with round half up
+    let amountRupees = 0;
+    if (delivered >= TOTAL_BILLABLE_DAYS) {
+      amountRupees = planPrice; // Guarantee #1
+    } else if (delivered > 0) {
+      const planPaise = planPrice * 100;
+      const totalPaise = Math.round((planPaise * delivered) / TOTAL_BILLABLE_DAYS);
+      amountRupees = totalPaise / 100;
+    }
+
+    totalAmount.textContent = '₹' + amountRupees.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    formulaElem.textContent = `₹${planPrice.toLocaleString('en-IN')} × ${delivered} ÷ ${TOTAL_BILLABLE_DAYS}`;
+  }
+
+  planSlider.addEventListener('input', updateSimulator);
+  pausedSlider.addEventListener('input', updateSimulator);
+  updateSimulator();
+
+  function quickPhone(phoneNum) {
+    const input = document.getElementById('quick-phone');
+    if (input) {
+      input.value = phoneNum;
+      document.getElementById('quick-login-form').submit();
+    }
+  }
+</script>
+{% endblock %}

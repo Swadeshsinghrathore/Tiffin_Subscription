@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Delivery Notification Service — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <h1>Delivery Notification Service</h1>
+      <span class="badge badge-active">
+        <span class="badge-dot"></span> 9:00 AM Daily Scheduler
+      </span>
+    </div>
+    <p class="page-subtitle">
+      Automated email notifications dispatched every morning to active subscribers scheduled for lunch delivery
+    </p>
+  </div>
+
+  <div class="page-actions">
+    <form action="{{ url_for('send_notifications_today') }}" method="POST" style="display: inline;">
+      <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Send 9:00 AM delivery notification emails to all subscribers due today?');">
+        ✉️ Send Today's Notifications Now
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Compact 4-Column Status Row -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-title">Today's Service Status</div>
+    <div class="stat-value" style="font-size: 18px; color: {% if is_delivery_day %}var(--state-success){% else %}var(--state-warning){% endif %};">
+      {% if is_delivery_day %}
+        Delivery Active
+      {% else %}
+        No Delivery
+      {% endif %}
+    </div>
+    <div class="stat-meta">{{ today_formatted }}</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Subscribers Due Today</div>
+    <div class="stat-value" style="color: var(--brand-primary);">
+      {{ eligible_customers | length }}
+    </div>
+    <div class="stat-meta">Active &bull; Unpaused &bull; Mon–Fri</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Daily Schedule</div>
+    <div class="stat-value" style="font-size: 20px;">9:00 AM</div>
+    <div class="stat-meta">Automatic morning dispatch</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Total Dispatched</div>
+    <div class="stat-value">{{ logs | length }}</div>
+    <div class="stat-meta">Recorded notification logs</div>
+  </div>
+</div>
+
+<!-- Status Banner if Weekend or Holiday -->
+{% if not is_delivery_day %}
+  <div class="alert alert-warning" style="margin-bottom: 20px;">
+    <strong>ℹ️ Notice:</strong> {{ status_reason }}
+  </div>
+{% else %}
+  <div class="guarantee-banner" style="margin-top: 0; margin-bottom: 20px;">
+    <span style="font-size: 14px;">✉️</span>
+    <div>
+      <strong>Automatic Notification Rule:</strong> Every weekday morning at 9:00 AM, the notification service emails every customer who is active and not paused, confirming their meal plan, delivery window (12:00 PM &ndash; 1:30 PM), and delivery address.
+    </div>
+  </div>
+{% endif %}
+
+<!-- Subscribers Due Today Table -->
+<div class="table-container">
+  <div class="table-header-bar">
+    <h2 class="table-title">Subscribers Due for Delivery Today ({{ today_formatted }})</h2>
+    <span class="table-formula">
+      {{ eligible_customers | length }} {{ 'subscriber' if (eligible_customers | length) == 1 else 'subscribers' }} scheduled
+    </span>
+  </div>
+
+  {% if eligible_customers %}
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Phone (Lookup Key)</th>
+            <th>Notification Email</th>
+            <th>Meal Plan</th>
+            <th>Delivery Address</th>
+            <th style="text-align: right;">Status Today</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in eligible_customers %}
+            <tr>
+              <td>
+                <a href="{{ url_for('customer_detail', phone=c.phone) }}" class="table-cell-title">
+                  {{ c.name }}
+                </a>
+              </td>
+              <td>
+                <span style="font-family: monospace; font-weight: 600;">
+                  {{ c.phone }}
+                </span>
+              </td>
+              <td>
+                <span style="color: var(--text-primary); font-size: 13px;">
+                  {{ c.email or (c.name.lower().replace(' ', '.') ~ '@example.com') }}
+                </span>
+              </td>
+              <td>
+                <span class="badge badge-active">{{ c.plan.name if c.plan else 'Standard Veg' }}</span>
+                <span class="table-cell-sub">{{ c.plan.monthly_price_formatted if c.plan else '' }}/mo</span>
+              </td>
+              <td class="table-cell-sub">
+                {{ c.address or 'Standard Delivery Location' }}
+              </td>
+              <td style="text-align: right;">
+                <span class="badge badge-active">
+                  <span class="badge-dot"></span> Delivering
+                </span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="text-align: center; color: var(--text-muted); padding: 32px 16px; font-size: 13px;">
+      No subscribers are scheduled for delivery today. Either it is a weekend/holiday, or all subscribers are currently paused.
+    </div>
+  {% endif %}
+</div>
+
+<!-- Notification Dispatch Logs Table -->
+<div class="table-container">
+  <div class="table-header-bar">
+    <h2 class="table-title">Notification Dispatch History</h2>
+    <span class="table-formula">Recent email dispatches</span>
+  </div>
+
+  {% if logs %}
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Sent At</th>
+            <th>Delivery Date</th>
+            <th>Customer</th>
+            <th>Recipient Email</th>
+            <th>Subject</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+            <tr>
+              <td class="table-cell-sub">{{ log.sent_at[:19] if log.sent_at else '—' }}</td>
+              <td><strong>{{ log.delivery_date.strftime('%b %d, %Y') }}</strong></td>
+              <td><strong>{{ log.customer_name or 'Subscriber' }}</strong></td>
+              <td><code>{{ log.recipient_email }}</code></td>
+              <td>{{ log.subject }}</td>
+              <td>
+                {% if log.status == 'sent' %}
+                  <span class="badge badge-active">Dispatched (SMTP)</span>
+                {% elif log.status == 'logged' %}
+                  <span class="badge badge-live">Logged (Simulated)</span>
+                {% else %}
+                  <span class="badge badge-ended">Failed</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div style="text-align: center; color: var(--text-muted); padding: 32px 16px; font-size: 13px;">
+      No notification dispatch history yet. Click <strong>"Send Today's Notifications Now"</strong> above to dispatch the first batch!
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

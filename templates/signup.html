@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Owner Registration — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div class="brand-icon" style="margin: 0 auto 1rem auto; width: 48px; height: 48px; font-size: 1.6rem;">🍛</div>
+      <h2>Register Your Kitchen</h2>
+      <p style="color: var(--slate-600); font-size: 0.925rem; margin-top: 0.35rem;">
+        Start managing subscribers and generating exact pro-rated billing
+      </p>
+    </div>
+
+    <form action="{{ url_for('owner_signup') }}" method="POST">
+      <div class="form-group">
+        <label class="form-label" for="business_name">Kitchen / Business Name <span class="required">*</span></label>
+        <input
+          type="text"
+          id="business_name"
+          name="business_name"
+          value="{{ form_data.business_name if form_data else '' }}"
+          placeholder="e.g. Annapurna Home Tiffin Service"
+          class="form-control"
+          required
+          autofocus
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="username">Owner Username <span class="required">*</span></label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          value="{{ form_data.username if form_data else '' }}"
+          placeholder="e.g. priya_kitchen"
+          class="form-control"
+          required
+        >
+        <span class="form-text">Lowercase alphanumeric handle for logging in.</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address <span class="required">*</span></label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          value="{{ form_data.email if form_data else '' }}"
+          placeholder="e.g. owner@mykitchen.com"
+          class="form-control"
+          required
+        >
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="password">Password <span class="required">*</span></label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Min 6 characters"
+            class="form-control"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="confirm_password">Confirm Password <span class="required">*</span></label>
+          <input
+            type="password"
+            id="confirm_password"
+            name="confirm_password"
+            placeholder="Repeat password"
+            class="form-control"
+            required
+          >
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem; padding: 0.85rem;">
+        🚀 Create Kitchen Account
+      </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--slate-200); font-size: 0.9rem; color: var(--slate-600);">
+      Already have an owner account?
+      <a href="{{ url_for('owner_login') }}" style="font-weight: 700;">Sign in</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

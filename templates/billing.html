@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Billing Sheet ({{ month_name }} {{ year }}) — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <h1>Monthly Billing Sheet</h1>
+      {% if is_frozen %}
+        <span class="badge badge-frozen">
+          <span class="badge-dot"></span> Frozen Invoices
+        </span>
+      {% elif is_future_month %}
+        <span class="badge" style="background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE;">
+          <span class="badge-dot" style="background: #6366F1;"></span> Projected (Future Month)
+        </span>
+      {% else %}
+        <span class="badge badge-live">
+          <span class="badge-dot"></span> Live Calculation
+        </span>
+      {% endif %}
+    </div>
+    <p class="page-subtitle">Pro-rated invoices calculated on delivery weekdays minus paused days and holidays</p>
+  </div>
+
+  <div class="page-actions">
+    <!-- Month Navigation Buttons -->
+    <div class="month-selector">
+      <a href="{{ url_for('billing_sheet', year=prev_year, month=prev_month) }}" class="btn btn-secondary btn-sm" title="Previous Month">
+        &larr; Prev
+      </a>
+      <span class="month-display">{{ month_name }} {{ year }}</span>
+      <a href="{{ url_for('billing_sheet', year=next_year, month=next_month) }}" class="btn btn-secondary btn-sm" title="Next Month">
+        Next &rarr;
+      </a>
+    </div>
+
+    <button onclick="window.print();" class="btn btn-secondary btn-sm">
+      🖨️ Print Sheet
+    </button>
+
+    {% if is_frozen %}
+      <form action="{{ url_for('billing_unfreeze') }}" method="POST" style="display: inline;">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Unfreezing allows bills to be recalculated based on live pauses. Continue?');">
+          🔓 Unfreeze Month
+        </button>
+      </form>
+    {% else %}
+      <form action="{{ url_for('billing_generate') }}" method="POST" style="display: inline;">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="btn btn-primary btn-sm" {% if not bills %}disabled{% endif %} onclick="return confirm('{% if is_future_month %}Note: {{ month_name }} {{ year }} is in the future. Are you sure you want to freeze projected bills now?{% else %}Freeze and finalize invoices for {{ month_name }} {{ year }}?{% endif %}');">
+          🔒 Freeze & Finalize Bills
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_future_month %}
+  <div class="alert alert-info" style="background: #EEF2FF; border-color: #C7D2FE; color: #3730A3;">
+    🔮 <strong>Future Month Projection:</strong> You are viewing projected delivery numbers for <strong>{{ month_name }} {{ year }}</strong>. Ongoing monthly subscriptions continue automatically. Any customer with an un-resumed open pause (like Rajesh Sharma) will project ₹0 until their pause is closed.
+  </div>
+{% endif %}
+
+{% if is_frozen %}
+  <div class="alert alert-info" style="background: #F3E8FF; border-color: #D8B4FE; color: #581C87;">
+    🔒 <strong>Frozen Snapshot:</strong> This month's billing was locked on <strong>{{ frozen_at }}</strong>. Edits to customer pauses after this date will not alter this finalized billing sheet.
+  </div>
+{% endif %}
+
+<!-- Compact 4-Column Statistics Row -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-title">Total Revenue</div>
+    <div class="stat-value">{{ total_revenue_formatted }}</div>
+    <div class="stat-meta">{{ bills | length }} {{ 'subscriber' if (bills | length) == 1 else 'subscribers' }}</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Billable Weekdays</div>
+    <div class="stat-value">{{ billable_days_month }}</div>
+    <div class="stat-meta">Mon–Fri minus holidays</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Meals Delivered</div>
+    <div class="stat-value">{{ total_delivered_meals }}</div>
+    <div class="stat-meta">Total lunches served</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Service Holidays</div>
+    <div class="stat-value">{{ holidays_count }}</div>
+    <div class="stat-meta">
+      {% if holidays_count > 0 %}
+        <a href="{{ url_for('holidays_view') }}">View closures</a>
+      {% else %}
+        No closures this month
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Bills Table Section -->
+<div class="table-container">
+  <div class="table-header-bar">
+    <h2 class="table-title">Per-Customer Billing Breakdown</h2>
+    <span class="table-formula">Formula: Plan Base &times; Delivered Days &divide; Billable Days</span>
+  </div>
+
+  {% if bills %}
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Meal Plan</th>
+            <th style="text-align: center;">Billable</th>
+            <th style="text-align: center;">Paused</th>
+            <th style="text-align: center;">Delivered</th>
+            <th style="text-align: right;">Daily Rate</th>
+            <th style="text-align: right;">Total Bill</th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bills %}
+            <tr>
+              <td>
+                <a href="{{ url_for('customer_detail', phone=b.customer.phone) }}" class="table-cell-title">
+                  {{ b.customer.name }}
+                </a>
+                {% if b.transfer_info %}
+                  {% if b.customer.id == b.transfer_info.from_customer_id %}
+                    <span class="table-cell-sub" style="color: #6366F1; font-size: 11px;">
+                      &rarr; Transferred to {{ b.transfer_info.to_customer_name }} ({{ b.transfer_info.transfer_date.strftime('%b %d') }})
+                    </span>
+                  {% elif b.customer.id == b.transfer_info.to_customer_id %}
+                    <span class="table-cell-sub" style="color: #16A34A; font-size: 11px;">
+                      &larr; Handed over from {{ b.transfer_info.from_customer_name }} ({{ b.transfer_info.transfer_date.strftime('%b %d') }})
+                    </span>
+                  {% endif %}
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ url_for('customer_detail', phone=b.customer.phone) }}" style="font-family: monospace; font-weight: 600;">
+                  {{ b.customer.phone }}
+                </a>
+              </td>
+              <td>
+                <span class="table-cell-title">{{ b.plan.name }}</span>
+                <span class="table-cell-sub">{{ b.plan_price_formatted }}/mo</span>
+              </td>
+              <td style="text-align: center; font-weight: 600;">
+                {{ b.billable_days }}
+              </td>
+              <td style="text-align: center; color: #d9480f; font-weight: 600;">
+                {% if b.paused_days > 0 %}
+                  -{{ b.paused_days }}
+                {% else %}
+                  0
+                {% endif %}
+              </td>
+              <td style="text-align: center; color: #087f5b; font-weight: 700; font-size: 1.05rem;">
+                {{ b.delivered_days }}
+              </td>
+              <td style="text-align: right; color: var(--neutral-muted); font-size: 0.875rem;">
+                {{ b.daily_rate_formatted }}
+              </td>
+              <td style="text-align: right;">
+                <span style="font-size: 1.15rem; font-weight: 800; color: var(--neutral-dark);">
+                  {{ b.amount_formatted }}
+                </span>
+              </td>
+              <td>
+                {% if b.transfer_info %}
+                  {% if b.customer.id == b.transfer_info.from_customer_id %}
+                    <span class="badge" style="background: #EEF2FF; color: #4338CA; font-size: 0.72rem; border: 1px solid #C7D2FE;">Transferred Out</span>
+                  {% else %}
+                    <span class="badge" style="background: #F0FDF4; color: #15803D; font-size: 0.72rem; border: 1px solid #BBF7D0;">Transferred In</span>
+                  {% endif %}
+                {% elif b.delivered_days == b.billable_days and b.billable_days > 0 %}
+                  <span class="badge badge-active" style="font-size: 0.72rem;">Full Month</span>
+                {% elif b.delivered_days == 0 %}
+                  <span class="badge badge-ended" style="font-size: 0.72rem;">₹0 (Paused)</span>
+                {% else %}
+                  <span class="badge badge-live" style="font-size: 0.72rem;">Pro-Rated</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background: #F8FAFC; font-weight: 800; border-top: 2px solid var(--neutral-border);">
+            <td colspan="5" style="padding: 1rem 1.25rem;">Total For Month</td>
+            <td style="text-align: center; color: #087f5b; padding: 1rem 1.25rem;">
+              {{ total_delivered_meals }}
+            </td>
+            <td></td>
+            <td style="text-align: right; color: var(--primary); font-size: 1.25rem; padding: 1rem 1.25rem;">
+              {{ total_revenue_formatted }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🧾</div>
+      <h3 class="empty-title">No Active Subscriptions for {{ month_name }} {{ year }}</h3>
+      <p class="empty-text">
+        There are no customers with subscriptions covering this month.
+      </p>
+      <a href="{{ url_for('subscribe_customer') }}" class="btn btn-primary">+ Add New Subscriber</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

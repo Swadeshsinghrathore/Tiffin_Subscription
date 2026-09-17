@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Service Holidays — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Service Closure Days & Holidays</h1>
+    <p class="page-subtitle">Days when the tiffin kitchen is closed. Excluded from both numerator and denominator.</p>
+  </div>
+</div>
+
+<div class="guarantee-banner">
+  <span style="font-size: 1.25rem;">🏖️</span>
+  <div>
+    <strong>Service Holiday Rule:</strong> When the kitchen is closed on a weekday, that day is deducted from the month's billable delivery days for <em>all</em> subscribers. An unpaused full-month subscriber still pays the exact plan price!
+  </div>
+</div>
+
+<div class="detail-grid">
+  <!-- Holidays Table -->
+  <div class="table-container">
+    <div class="table-header-bar">
+      <h2 class="table-title">Scheduled Kitchen Closures</h2>
+      <span class="table-formula">
+        {{ holidays | length }} {{ 'closure' if (holidays | length) == 1 else 'closures' }} recorded
+      </span>
+    </div>
+    {% if holidays %}
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Day</th>
+              <th>Holiday / Festival Name</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in holidays %}
+              <tr>
+                <td><strong>{{ h.day.strftime('%b %d, %Y') }}</strong></td>
+                <td>
+                  <span class="badge badge-live">{{ h.day.strftime('%A') }}</span>
+                </td>
+                <td>{{ h.label }}</td>
+                <td style="text-align: right;">
+                  <form action="{{ url_for('delete_holiday_route', day_iso=h.day.isoformat()) }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Remove this closure?');">
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="card-body" style="text-align: center; color: var(--neutral-muted); padding: 3rem;">
+        No service holidays recorded. Food is delivered on every Monday through Friday.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Add New Holiday Form -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Add Kitchen Closure</h3>
+      </div>
+      <div class="card-body">
+        <form action="{{ url_for('holidays_view') }}" method="POST">
+          <div class="form-group">
+            <label class="form-label" for="day">Closure Date <span class="required">*</span></label>
+            <input type="date" id="day" name="day" value="{{ today_iso }}" class="form-control" required>
+            <span class="form-text">If this falls on Mon–Fri, it will not be billed.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="label">Holiday / Reason <span class="required">*</span></label>
+            <input type="text" id="label" name="label" placeholder="e.g. Holi, Diwali, Kitchen Maintenance" class="form-control" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            + Save Service Holiday
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

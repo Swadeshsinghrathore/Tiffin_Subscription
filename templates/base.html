@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TiffinBox — Pro-Rated Billing & Subscriptions{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍱</text></svg>">
+</head>
+<body>
+  <header class="navbar">
+    <div class="nav-container">
+      <a href="{{ url_for('customer_portal') if current_customer else (url_for('customers_roster') if current_owner else url_for('landing_page')) }}" class="brand">
+        <span class="brand-icon">🍱</span>
+        <span class="brand-name">TiffinBox</span>
+        <span class="brand-tag">Pro-Rata</span>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          {% if current_customer %}
+            <li>
+              <a href="{{ url_for('customer_portal') }}" class="nav-link {% if request.endpoint == 'customer_portal' %}active{% endif %}">
+                My Tiffin Portal
+              </a>
+            </li>
+          {% elif current_owner %}
+            <li>
+              <a href="{{ url_for('customers_roster') }}" class="nav-link {% if request.endpoint in ['customers_roster', 'customer_detail'] %}active{% endif %}">
+                Subscribers
+              </a>
+            </li>
+            <li>
+              <a href="{{ url_for('billing_sheet') }}" class="nav-link {% if request.endpoint == 'billing_sheet' %}active{% endif %}">
+                Billing Sheet
+              </a>
+            </li>
+            <li>
+              <a href="{{ url_for('notifications_view') }}" class="nav-link {% if request.endpoint == 'notifications_view' %}active{% endif %}">
+                Notifications
+              </a>
+            </li>
+          {% else %}
+            <li>
+              <a href="{{ url_for('landing_page') }}" class="nav-link {% if request.endpoint == 'landing_page' %}active{% endif %}">
+                Overview
+              </a>
+            </li>
+            <li>
+              <a href="{{ url_for('customers_roster') }}" class="nav-link {% if request.endpoint in ['customers_roster', 'customer_detail'] %}active{% endif %}">
+                Demo Roster
+              </a>
+            </li>
+          {% endif %}
+          <li>
+            <a href="{{ url_for('plans_view') }}" class="nav-link {% if request.endpoint == 'plans_view' %}active{% endif %}">
+              Plans
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('holidays_view') }}" class="nav-link {% if request.endpoint == 'holidays_view' %}active{% endif %}">
+              Holidays
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        {% if current_owner %}
+          <a href="{{ url_for('subscribe_customer') }}" class="btn btn-primary btn-sm">
+            + New Subscriber
+          </a>
+
+          <div class="owner-badge" title="Logged in as {{ current_owner.username }}">
+            <span class="owner-avatar">{{ current_owner.business_name[:1] | upper }}</span>
+            <span class="owner-name">
+              {{ current_owner.business_name }}
+            </span>
+          </div>
+
+          <a href="{{ url_for('owner_logout') }}" class="btn btn-secondary btn-sm" title="Sign out">
+            Sign Out
+          </a>
+        {% elif current_customer %}
+          <div class="owner-badge" title="Logged in as {{ current_customer.name }}">
+            <span class="owner-avatar" style="background: var(--state-success);">👤</span>
+            <span class="owner-name">
+              {{ current_customer.name }}
+            </span>
+          </div>
+
+          <a href="{{ url_for('customer_logout') }}" class="btn btn-secondary btn-sm" title="Sign out">
+            Sign Out
+          </a>
+        {% else %}
+          <a href="{{ url_for('customer_login') }}" class="btn btn-secondary btn-sm" style="border-color: var(--brand-primary); color: var(--brand-primary);">
+            👤 Customer Portal
+          </a>
+          <a href="{{ url_for('owner_login') }}" class="btn btn-secondary btn-sm">
+            Log In
+          </a>
+          <a href="{{ url_for('owner_signup') }}" class="btn btn-primary btn-sm">
+            Sign Up
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+              <span>{{ message }}</span>
+              <button class="alert-close" onclick="this.parentElement.remove();">&times;</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <span style="font-size: 1rem;">🍱</span>
+        <span>TiffinBox Pro-Rated Billing</span>
+      </div>
+      <p class="footer-meta">
+        Mon–Fri Delivery &bull; Exact Decimal Paise &bull; Pure Date-Set Operations
+      </p>
+      <div class="footer-links">
+        {% if current_customer %}
+          <span style="color: var(--text-muted);">Customer: <strong>{{ current_customer.name }}</strong> ({{ current_customer.phone }}) &bull;</span>
+          <a href="{{ url_for('customer_portal') }}">My Portal</a>
+          <a href="{{ url_for('customer_logout') }}">Sign Out</a>
+        {% elif current_owner %}
+          <span style="color: var(--text-muted);">Logged in as <strong>{{ current_owner.username }}</strong> &bull;</span>
+          <a href="{{ url_for('owner_logout') }}">Sign Out</a>
+        {% else %}
+          <a href="{{ url_for('customer_login') }}">Customer Portal</a>
+          <a href="{{ url_for('owner_login') }}">Kitchen Owner Login</a>
+          <a href="{{ url_for('owner_signup') }}">Sign Up</a>
+        {% endif %}
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

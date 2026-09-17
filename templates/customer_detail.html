@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}{{ customer.name }} ({{ customer.phone }}) — Customer Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <a href="{{ url_for('customers_roster') }}" style="color: var(--neutral-muted); font-size: 1.1rem;">&larr; Back to Roster</a>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+      <h1>{{ customer.name }}</h1>
+      <span class="badge {{ customer.status.badge_class }}">
+        <span class="badge-dot"></span>
+        {{ customer.status.label }}
+      </span>
+    </div>
+    <p class="page-subtitle">Phone Lookup Key: <strong>{{ customer.phone }}</strong> &bull; Member since {{ customer.start_date.strftime('%B %d, %Y') }}</p>
+  </div>
+
+  <div class="page-actions">
+    {% if not customer.transferred_to and customer.status.value != 'ended' %}
+      <a href="{{ url_for('customer_transfer', phone=customer.phone) }}" class="btn btn-primary">
+        🔄 Transfer Subscription
+      </a>
+    {% endif %}
+    <a href="{{ url_for('billing_sheet', year=current_bill.year, month=current_bill.month) }}" class="btn btn-secondary">
+      🧾 Full Billing Sheet
+    </a>
+  </div>
+</div>
+
+<div class="detail-grid">
+  <!-- Left Column: Customer Overview, Live Bill, Pause History -->
+  <div>
+    <!-- Customer Profile Card -->
+    <div class="card">
+      <div class="card-body">
+        <div class="customer-header-card">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="customer-avatar">
+              {{ customer.name[:1] | upper }}
+            </div>
+            <div>
+              <h3 style="font-size: 1.3rem;">{{ customer.name }}</h3>
+              <div style="font-family: monospace; font-size: 1.05rem; font-weight: 700; color: var(--primary);">
+                📞 {{ customer.phone }}
+              </div>
+              {% if customer.address %}
+                <div style="color: var(--neutral-muted); font-size: 0.9rem; margin-top: 0.2rem;">
+                  📍 {{ customer.address }}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div style="text-align: right;">
+            <span class="table-cell-sub">Current Plan</span>
+            <div style="font-size: 1.15rem; font-weight: 700; color: var(--neutral-dark);">
+              {{ customer.plan.name if customer.plan else 'Standard' }}
+            </div>
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--primary);">
+              {{ customer.plan.monthly_price_formatted if customer.plan else '' }}/month
+            </div>
+          </div>
+        </div>
+
+        <div class="customer-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Delivery Schedule</span>
+            <span class="meta-value">Monday – Friday</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Subscription Start</span>
+            <span class="meta-value">{{ customer.start_date.strftime('%d %b %Y') }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Subscription Status</span>
+            <span class="meta-value">
+              {% if customer.end_date %}
+                Ends on {{ customer.end_date.strftime('%d %b %Y') }}
+              {% else %}
+                Ongoing (Monthly Auto)
+              {% endif %}
+            </span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Created At</span>
+            <span class="meta-value">{{ customer.created_at[:10] if customer.created_at else 'N/A' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Banners (if involved in mid-cycle transfer) -->
+    {% if customer.transferred_to %}
+      <div class="alert alert-info" style="margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; background: #F0F9FF; border: 1px solid #BAE6FD; color: #0369A1; border-radius: 8px; padding: 14px 16px;">
+        <span style="font-size: 20px;">🔄</span>
+        <div>
+          <div style="font-weight: 700; font-size: 14px;">Subscription Transferred Mid-Cycle</div>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #0C4A6E;">
+            This subscription was transferred to
+            <strong><a href="{{ url_for('customer_detail', phone=customer.transferred_to.to_customer_phone) }}" style="color: #0284C7; text-decoration: underline;">{{ customer.transferred_to.to_customer_name }} ({{ customer.transferred_to.to_customer_phone }})</a></strong>
+            effective <strong>{{ customer.transferred_to.transfer_date.strftime('%B %d, %Y') }}</strong>.
+            Billing for {{ customer.name }} stopped at cutoff date {{ customer.end_date.strftime('%B %d, %Y') if customer.end_date else '' }}.
+          </p>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if customer.transferred_from %}
+      <div class="alert alert-success" style="margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; border-radius: 8px; padding: 14px 16px;">
+        <span style="font-size: 20px;">📥</span>
+        <div>
+          <div style="font-weight: 700; font-size: 14px;">Subscription Inherited Mid-Cycle</div>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #166534;">
+            This subscription was handed over from
+            <strong><a href="{{ url_for('customer_detail', phone=customer.transferred_from.from_customer_phone) }}" style="color: #16A34A; text-decoration: underline;">{{ customer.transferred_from.from_customer_name }} ({{ customer.transferred_from.from_customer_phone }})</a></strong>
+            on <strong>{{ customer.transferred_from.transfer_date.strftime('%B %d, %Y') }}</strong>.
+            The meal plan and billing cycle carried over seamlessly.
+          </p>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Active Pause Banner / Resume Action (if currently paused) -->
+    {% if customer.active_pause %}
+      <div class="alert alert-warning" style="margin-bottom: 20px; flex-direction: column; align-items: stretch; gap: 12px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px;">
+              <span>⏸️</span> Delivery Currently Paused
+            </div>
+            <p style="margin-top: 4px; font-size: 13px;">
+              Paused since <strong>{{ customer.active_pause.start_date.strftime('%b %d, %Y') }}</strong>
+              {% if customer.active_pause.reason %}
+                &bull; Reason: <em>"{{ customer.active_pause.reason }}"</em>
+              {% endif %}
+            </p>
+            <p style="font-size: 12px; opacity: 0.85; margin-top: 2px;">
+              Customer is not billed for paused weekdays. Close pause when ready to resume.
+            </p>
+          </div>
+
+          <form action="{{ url_for('customer_resume', phone=customer.phone) }}" method="POST" style="display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap;">
+            <div>
+              <label class="form-label" style="font-size: 11px; margin-bottom: 2px;">Resume Date</label>
+              <input type="date" name="resume_date" value="{{ today_iso }}" class="form-control" style="padding: 4px 8px; font-size: 12px;" required>
+            </div>
+            <button type="submit" class="btn btn-success btn-sm">
+              Resume Delivery
+            </button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Pause History -->
+    <div class="table-container">
+      <div class="table-header-bar">
+        <h2 class="table-title">Pause History</h2>
+        <span class="table-formula">
+          {{ pauses | length }} recorded {{ 'pause' if (pauses | length) == 1 else 'pauses' }}
+        </span>
+      </div>
+      {% if pauses %}
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Reason</th>
+                <th>Recorded At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in pauses %}
+                <tr>
+                  <td><strong>{{ p.start_date.strftime('%b %d, %Y') }}</strong></td>
+                  <td>
+                    {% if p.end_date %}
+                      <strong>{{ p.end_date.strftime('%b %d, %Y') }}</strong>
+                    {% else %}
+                      <span class="badge badge-paused">Open-Ended</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if p.is_open %}
+                      <span class="badge badge-paused">Active Pause</span>
+                    {% else %}
+                      <span class="badge badge-ended">Closed</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ p.reason or '—' }}</td>
+                  <td class="table-cell-sub">{{ p.created_at[:16] if p.created_at else '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div style="text-align: center; color: var(--text-muted); padding: 24px; font-size: 13px;">
+          No pauses recorded for this customer yet. Every delivery day this month will be billed.
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Subscription Cancellation / End -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="color: var(--state-danger);">End Subscription</h3>
+      </div>
+      <div class="card-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          Ending a subscription stops future billing after the selected end date. Days delivered up through the end date will still be billed.
+        </p>
+        <form action="{{ url_for('customer_end', phone=customer.phone) }}" method="POST" style="display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap;">
+          <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+            <label class="form-label">End Date</label>
+            <input type="date" name="end_date" value="{{ customer.end_date.isoformat() if customer.end_date else today_iso }}" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to end this subscription?');">
+            Cancel Subscription
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Live Month Bill & Record Pause Form -->
+  <div>
+    <!-- Live Month Bill Box -->
+    <div class="bill-breakdown-card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div>
+          <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--brand-primary); letter-spacing: 0.05em;">Live Bill Calculation</span>
+          <h3 style="font-size: 15px; margin-top: 2px;">{{ current_month_name }} {{ current_bill.year }}</h3>
+        </div>
+        {% if current_bill.delivered_days == current_bill.billable_days and current_bill.billable_days > 0 %}
+          <span class="badge badge-active">Full Month</span>
+        {% else %}
+          <span class="badge badge-live">Pro-Rated</span>
+        {% endif %}
+      </div>
+
+      <div class="breakdown-row">
+        <span>Monthly Plan Base</span>
+        <strong>{{ current_bill.plan_price_formatted }}</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Service Billable Days</span>
+        <strong>{{ current_bill.billable_days }} weekdays</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Delivery Days Paused</span>
+        <span style="color: var(--state-warning); font-weight: 600;">-{{ current_bill.paused_days }} days</span>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Days Actually Delivered</span>
+        <strong style="color: var(--state-success);">{{ current_bill.delivered_days }} days</strong>
+      </div>
+
+      <div class="breakdown-row">
+        <span>Effective Daily Rate</span>
+        <span>{{ current_bill.daily_rate_formatted }} / day</span>
+      </div>
+
+      <div class="breakdown-row total">
+        <span>Month-End Bill</span>
+        <span class="amount">{{ current_bill.amount_formatted }}</span>
+      </div>
+
+      <div style="margin-top: 12px; font-size: 11px; color: var(--text-muted); background: var(--bg-page); padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+        Formula: <code>{{ current_bill.plan_price_formatted }} &times; {{ current_bill.delivered_days }} &divide; {{ current_bill.billable_days }}</code>
+      </div>
+    </div>
+
+    <!-- Record New Pause Form -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Record a Pause</h3>
+      </div>
+      <div class="card-body">
+        {% if customer.active_pause %}
+          <div class="alert alert-warning" style="font-size: 0.85rem;">
+            ⚠️ An open-ended pause is currently active. Resume it first before creating another pause.
+          </div>
+        {% else %}
+          <form action="{{ url_for('customer_pause', phone=customer.phone) }}" method="POST">
+            <div class="form-group">
+              <label class="form-label">Pause Start Date <span class="required">*</span></label>
+              <input type="date" name="start_date" value="{{ today_iso }}" class="form-control" required>
+              <span class="form-text">First day customer will NOT receive food.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pause End Date (Optional)</label>
+              <input type="date" name="end_date" class="form-control">
+              <span class="form-text">Leave blank for open-ended pause (resumed later).</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Reason / Notes</label>
+              <input type="text" name="reason" placeholder="e.g. Travel, Family Function, Diwali" class="form-control">
+            </div>
+
+            <button type="submit" class="btn btn-warning" style="width: 100%;">
+              ⏸️ Record Pause
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

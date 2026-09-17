@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Customer Portal Login — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <div class="brand-icon" style="margin: 0 auto 10px auto; width: 44px; height: 44px; font-size: 1.5rem;">🍱</div>
+      <h2>Customer Portal</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+        Track daily lunch deliveries, pause for travel, switch meal plans, and view live month-end bills
+      </p>
+    </div>
+
+    <!-- 1-Click Demo Customer Quick Selection -->
+    <div style="margin-bottom: 16px;">
+      <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; display: block; margin-bottom: 6px;">
+        ⚡ 1-Click Demo Accounts:
+      </span>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <button type="button" class="demo-chip" onclick="fillPhone('9876543210');" style="margin-bottom: 0; text-align: left; width: 100%;">
+          <span>👤</span>
+          <div>
+            <strong>Asha Patel</strong> &bull; <code style="font-size: 11px;">9876543210</code> (Mini Meal, 3-day pause)
+          </div>
+        </button>
+        <button type="button" class="demo-chip" onclick="fillPhone('9988776655');" style="margin-bottom: 0; text-align: left; width: 100%;">
+          <span>👤</span>
+          <div>
+            <strong>Vikram Malhotra</strong> &bull; <code style="font-size: 11px;">9988776655</code> (Deluxe Veg, Full Month)
+          </div>
+        </button>
+        <button type="button" class="demo-chip" onclick="fillPhone('9899112233');" style="margin-bottom: 0; text-align: left; width: 100%;">
+          <span>👤</span>
+          <div>
+            <strong>Karan Kapoor</strong> &bull; <code style="font-size: 11px;">9899112233</code> (Mini Meal, Paused Today)
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <form action="{{ url_for('customer_login') }}" method="POST" id="customer-login-form">
+      <div class="form-group">
+        <label class="form-label" for="phone">
+          Registered Mobile Number <span class="required">*</span>
+        </label>
+        <input
+          type="tel"
+          id="phone"
+          name="phone"
+          value="{{ phone_val or '' }}"
+          placeholder="e.g. 9876543210"
+          class="form-control"
+          required
+          autofocus
+          autocomplete="tel"
+        >
+        <span class="form-text">Enter the 10-digit phone number you used when subscribing.</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px; padding: 10px;">
+        🍱 Open Customer Portal
+      </button>
+    </form>
+
+    <div style="text-align: center; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-subtle); font-size: 13px; color: var(--text-muted);">
+      Are you the kitchen owner?
+      <a href="{{ url_for('owner_login') }}" style="font-weight: 600;">Sign in as Kitchen Owner</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function fillPhone(phoneNum) {
+    var phoneInput = document.getElementById('phone');
+    phoneInput.value = phoneNum;
+    document.getElementById('customer-login-form').submit();
+  }
+</script>
+{% endblock %}

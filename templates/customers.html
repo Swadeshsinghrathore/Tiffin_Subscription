@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Subscribers Roster — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <h1>Subscriber Roster</h1>
+    <p class="page-subtitle">At-a-glance view of daily lunch subscriptions, active deliveries, and pauses</p>
+  </div>
+  <div class="page-actions">
+    <a href="{{ url_for('billing_sheet') }}" class="btn btn-secondary">
+      🧾 View Month Billing
+    </a>
+    <a href="{{ url_for('subscribe_customer') }}" class="btn btn-primary">
+      <span>+</span> Add Subscriber
+    </a>
+  </div>
+</div>
+
+<!-- Compact 4-Column Statistics Row -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-title">Total Subscribers</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    <div class="stat-meta">Registered customers</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Active Today</div>
+    <div class="stat-value" style="color: #16A34A;">{{ stats.active }}</div>
+    <div class="stat-meta">Lunch delivered today</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Paused Today</div>
+    <div class="stat-value" style="color: #D97706;">{{ stats.paused }}</div>
+    <div class="stat-meta">Delivery on hold</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-title">Ended / Other</div>
+    <div class="stat-value">{{ stats.ended }}</div>
+    <div class="stat-meta">Ended or future start</div>
+  </div>
+</div>
+
+<!-- Search and Filter Bar -->
+<div class="filter-bar">
+  <form action="{{ url_for('customers_roster') }}" method="GET" class="search-form">
+    {% if current_status and current_status != 'all' %}
+      <input type="hidden" name="status" value="{{ current_status }}">
+    {% endif %}
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        name="q"
+        value="{{ current_query or '' }}"
+        placeholder="Search by 10-digit phone or customer name..."
+        class="search-input"
+        autocomplete="off"
+      >
+    </div>
+    <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+    {% if current_query %}
+      <a href="{{ url_for('customers_roster', status=current_status) }}" class="btn btn-sm" style="color: var(--text-muted);">Clear</a>
+    {% endif %}
+  </form>
+
+  <ul class="filter-pills">
+    <li>
+      <a href="{{ url_for('customers_roster', status='all', q=current_query) }}" class="filter-pill {% if not current_status or current_status == 'all' %}active{% endif %}">
+        All ({{ stats.total }})
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('customers_roster', status='active', q=current_query) }}" class="filter-pill {% if current_status == 'active' %}active{% endif %}">
+        Active ({{ stats.active }})
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('customers_roster', status='paused', q=current_query) }}" class="filter-pill {% if current_status == 'paused' %}active{% endif %}">
+        Paused ({{ stats.paused }})
+      </a>
+    </li>
+    <li>
+      <a href="{{ url_for('customers_roster', status='ended', q=current_query) }}" class="filter-pill {% if current_status == 'ended' %}active{% endif %}">
+        Ended ({{ stats.ended }})
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Customers Table -->
+<div class="table-container">
+  {% if customers %}
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Phone (Lookup Key)</th>
+            <th>Meal Plan</th>
+            <th>Start Date</th>
+            <th>Status Today</th>
+            <th>Current Pause / Notes</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in customers %}
+            <tr>
+              <td>
+                <a href="{{ url_for('customer_detail', phone=c.phone) }}" class="table-cell-title">
+                  {{ c.name }}
+                </a>
+                {% if c.address %}
+                  <span class="table-cell-sub">{{ c.address }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ url_for('customer_detail', phone=c.phone) }}" style="font-family: monospace; font-weight: 700; font-size: 0.95rem;">
+                  {{ c.phone[:5] }} {{ c.phone[5:] }}
+                </a>
+              </td>
+              <td>
+                <span class="table-cell-title">{{ c.plan.name if c.plan else 'Standard' }}</span>
+                <span class="table-cell-sub">{{ c.plan.monthly_price_formatted if c.plan else '' }}/mo</span>
+              </td>
+              <td>
+                <span style="font-weight: 500;">{{ c.start_date.strftime('%b %d, %Y') }}</span>
+                {% if c.end_date %}
+                  <div class="table-cell-sub">Ends: {{ c.end_date.strftime('%b %d, %Y') }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge {{ c.status.badge_class }}">
+                  <span class="badge-dot"></span>
+                  {{ c.status.label }}
+                </span>
+              </td>
+              <td>
+                {% if c.active_pause %}
+                  <div style="font-size: 0.85rem; color: #d9480f; font-weight: 600;">
+                    ⏸️ Paused since {{ c.active_pause.start_date.strftime('%b %d') }}
+                    {% if c.active_pause.end_date %}
+                      until {{ c.active_pause.end_date.strftime('%b %d') }}
+                    {% else %}
+                      (open-ended)
+                    {% endif %}
+                  </div>
+                  {% if c.active_pause.reason %}
+                    <div class="table-cell-sub">Reason: {{ c.active_pause.reason }}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="table-cell-sub">Delivering Mon–Fri</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right;">
+                <a href="{{ url_for('customer_detail', phone=c.phone) }}" class="btn btn-secondary btn-sm">
+                  View & Manage &rarr;
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🍱</div>
+      <h3 class="empty-title">No Subscribers Found</h3>
+      <p class="empty-text">
+        {% if current_query or (current_status and current_status != 'all') %}
+          No customers matched your filter criteria. Try clearing search or status filters.
+        {% else %}
+          You haven't subscribed any customers yet. Add your first customer to start tracking deliveries.
+        {% endif %}
+      </p>
+      {% if current_query or (current_status and current_status != 'all') %}
+        <a href="{{ url_for('customers_roster') }}" class="btn btn-secondary">Clear Filters</a>
+      {% else %}
+        <a href="{{ url_for('subscribe_customer') }}" class="btn btn-primary">+ Add First Subscriber</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

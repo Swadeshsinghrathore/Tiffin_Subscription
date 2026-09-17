@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Subscribe New Customer — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="form-page-container">
+  <div class="page-header">
+    <div class="page-title-group">
+      <h1>New Customer Subscription</h1>
+      <p class="page-subtitle">Add a subscriber to the lunch delivery roster with a chosen meal plan</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form action="{{ url_for('subscribe_customer') }}" method="POST">
+        <div class="form-group">
+          <label class="form-label" for="phone">
+            Phone Number (Lookup Key) <span class="required">*</span>
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value="{{ form_data.phone if form_data else '' }}"
+            placeholder="e.g. 9876543210 or +91 98765 43210"
+            class="form-control"
+            required
+            autocomplete="tel"
+          >
+          <span class="form-text">
+            Normalized to 10 digits starting with 6–9. Primary key used for lookup and delivery management.
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="name">
+            Customer Name <span class="required">*</span>
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value="{{ form_data.name if form_data else '' }}"
+            placeholder="e.g. Asha Patel"
+            class="form-control"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">
+            Customer Email
+          </label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value="{{ form_data.email if form_data else '' }}"
+            placeholder="e.g. asha.patel@gmail.com"
+            class="form-control"
+          >
+          <span class="form-text">Used for daily 9:00 AM delivery notification emails.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="address">
+            Delivery Address
+          </label>
+          <input
+            type="text"
+            id="address"
+            name="address"
+            value="{{ form_data.address if form_data else '' }}"
+            placeholder="e.g. Flat 402, Sunshine Heights, Andheri West"
+            class="form-control"
+          >
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="plan_id">
+              Meal Plan <span class="required">*</span>
+            </label>
+            <select id="plan_id" name="plan_id" class="form-control" required>
+              {% for plan in plans %}
+                <option value="{{ plan.id }}" {% if form_data and form_data.plan_id == (plan.id|string) %}selected{% endif %}>
+                  {{ plan.name }} — {{ plan.monthly_price_formatted }}/mo
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="start_date">
+              Subscription Start Date <span class="required">*</span>
+            </label>
+            <input
+              type="date"
+              id="start_date"
+              name="start_date"
+              value="{{ form_data.start_date if form_data else today_iso }}"
+              class="form-control"
+              required
+            >
+            <span class="form-text">Joining mid-month pro-rates against the month's delivery days.</span>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--neutral-border);">
+          <a href="{{ url_for('customers_roster') }}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">
+            🍱 Start Subscription
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="guarantee-banner">
+    <span style="font-size: 1.25rem;">🛡️</span>
+    <div>
+      <strong>The Billing Guarantee:</strong> Customers are only charged for actual delivery weekdays. Pauses and service holidays are deducted cleanly without weekend or overlapping penalties.
+    </div>
+  </div>
+</div>
+{% endblock %}

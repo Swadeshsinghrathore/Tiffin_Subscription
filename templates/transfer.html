@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Transfer Subscription — {{ customer.name }} — TiffinBox{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title-group">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <a href="{{ url_for('customer_detail', phone=customer.phone) }}" style="color: var(--text-muted); font-size: 13px; text-decoration: none;">
+        &larr; Back to {{ customer.name }}
+      </a>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: var(--text-heading);">
+        🔄 Transfer Subscription Mid-Cycle
+      </h1>
+      <span class="badge badge-active">Cycle Carry-Over</span>
+    </div>
+    <p class="page-subtitle" style="margin-top: 4px; color: var(--text-muted); font-size: 13px;">
+      Transfer an active subscription to a new customer mid-cycle. The plan and cycle carry over seamlessly, and billing splits strictly by who was served.
+    </p>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start;">
+  <!-- Left Column: Current Details & Transfer Form -->
+  <div>
+    <!-- Current Customer Card -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header" style="border-bottom: 1px solid var(--border-subtle); padding: 14px 18px;">
+        <h3 class="card-title" style="font-size: 14px; margin: 0;">Outgoing Customer Profile</h3>
+      </div>
+      <div class="card-body" style="padding: 18px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="width: 44px; height: 44px; border-radius: 8px; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;">
+              {{ customer.name[:1] | upper }}
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 16px; color: var(--text-heading);">{{ customer.name }}</div>
+              <div style="font-family: monospace; font-size: 13px; color: var(--text-muted);">📞 {{ customer.phone }}</div>
+              {% if customer.address %}
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">📍 {{ customer.address }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div style="text-align: right;">
+            <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Carried-Over Plan</span>
+            <div style="font-weight: 700; font-size: 15px; color: var(--text-heading);">
+              {{ customer.plan.name if customer.plan else 'Standard' }}
+            </div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--brand-primary);">
+              {{ customer.plan.monthly_price_formatted if customer.plan else '' }}/mo
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; font-size: 12px;">
+          <div>
+            <span style="color: var(--text-muted); display: block;">Subscription Start</span>
+            <strong style="color: var(--text-heading);">{{ customer.start_date.strftime('%b %d, %Y') }}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); display: block;">Current Cycle End</span>
+            <strong style="color: var(--text-heading);">{{ customer.end_date.strftime('%b %d, %Y') if customer.end_date else 'Ongoing (Auto-Renew)' }}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); display: block;">Current Status</span>
+            <span class="badge {{ customer.status.badge_class }}">{{ customer.status.label }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Form Card -->
+    <div class="card">
+      <div class="card-header" style="border-bottom: 1px solid var(--border-subtle); padding: 14px 18px;">
+        <h3 class="card-title" style="font-size: 14px; margin: 0;">New Customer & Transfer Details</h3>
+      </div>
+      <div class="card-body" style="padding: 18px;">
+        <form action="{{ url_for('customer_transfer', phone=customer.phone) }}" method="POST">
+          <!-- Transfer Date -->
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label" style="font-weight: 600; font-size: 13px;">
+              Effective Transfer Date <span class="required" style="color: #EF4444;">*</span>
+            </label>
+            <input type="date" name="transfer_date" value="{{ form_data.get('transfer_date', default_date) }}" class="form-control" required style="max-width: 260px;">
+            <span class="form-text" style="display: block; font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+              This is the <strong>first day</strong> the new customer receives deliveries. {{ customer.name }} receives lunch through the preceding day.
+            </span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <!-- New Customer Name -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 13px;">
+                New Customer Name <span class="required" style="color: #EF4444;">*</span>
+              </label>
+              <input type="text" name="new_name" value="{{ form_data.get('new_name', '') }}" placeholder="e.g. Rahul Sharma" class="form-control" required>
+            </div>
+
+            <!-- New Customer Phone -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 13px;">
+                New Customer Phone (10 Digits) <span class="required" style="color: #EF4444;">*</span>
+              </label>
+              <input type="tel" name="new_phone" value="{{ form_data.get('new_phone', '') }}" placeholder="e.g. 9811223344" class="form-control" required>
+              <span class="form-text" style="font-size: 11px; color: var(--text-muted);">Unique phone number used for portal login.</span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <!-- New Customer Address -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 13px;">
+                New Delivery Address
+              </label>
+              <input type="text" name="new_address" value="{{ form_data.get('new_address', customer.address or '') }}" placeholder="Flat/Floor/Building address" class="form-control">
+              <span class="form-text" style="font-size: 11px; color: var(--text-muted);">Defaults to current address if taking over same premises.</span>
+            </div>
+
+            <!-- New Customer Email -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 13px;">
+                New Customer Email
+              </label>
+              <input type="email" name="new_email" value="{{ form_data.get('new_email', '') }}" placeholder="name@example.com" class="form-control">
+              <span class="form-text" style="font-size: 11px; color: var(--text-muted);">Receives daily 9:00 AM delivery notification emails.</span>
+            </div>
+          </div>
+
+          <!-- Reason / Notes -->
+          <div class="form-group" style="margin-bottom: 20px;">
+            <label class="form-label" style="font-weight: 600; font-size: 13px;">
+              Transfer Reason / Handover Notes
+            </label>
+            <input type="text" name="reason" value="{{ form_data.get('reason', '') }}" placeholder="e.g. Roommate takeover, Flat handover, Office transfer" class="form-control">
+          </div>
+
+          <!-- Actions -->
+          <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
+            <a href="{{ url_for('customer_detail', phone=customer.phone) }}" class="btn btn-secondary">
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Confirm subscription transfer? {{ customer.name }}\\'s subscription will end on the day prior to transfer, and the new customer will inherit this plan.');">
+              🔄 Confirm &amp; Transfer Subscription
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Split Billing Mechanism Explanation -->
+  <div>
+    <div class="card" style="position: sticky; top: 80px;">
+      <div class="card-header" style="border-bottom: 1px solid var(--border-subtle); padding: 14px 18px; background: #F8FAFC;">
+        <h3 class="card-title" style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0;">
+          💡 How Billing Splits
+        </h3>
+      </div>
+      <div class="card-body" style="padding: 18px; font-size: 13px; line-height: 1.6; color: var(--text-body);">
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1E293B; margin-bottom: 4px;">
+            <span style="background: #F1F5F9; border-radius: 4px; padding: 2px 6px; font-size: 11px;">Phase 1</span>
+            <span>Outgoing Customer</span>
+          </div>
+          <p style="margin: 0; font-size: 12px; color: var(--text-muted);">
+            <strong>{{ customer.name }}</strong> is charged only for delivery days from <code>{{ customer.start_date.strftime('%b %d') }}</code> up to the cutoff (day before transfer), minus any pauses they took.
+          </p>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1E293B; margin-bottom: 4px;">
+            <span style="background: #ECFDF5; color: #047857; border-radius: 4px; padding: 2px 6px; font-size: 11px;">Phase 2</span>
+            <span>Incoming Customer</span>
+          </div>
+          <p style="margin: 0; font-size: 12px; color: var(--text-muted);">
+            The new customer takes over delivery starting on the effective transfer date. Their bill starts from that date through month-end.
+          </p>
+        </div>
+
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 12px; margin-top: 16px;">
+          <div style="font-weight: 700; font-size: 12px; color: #0F172A; margin-bottom: 6px;">
+            📐 Zero Overlap &bull; Exact Pro-Rata
+          </div>
+          <div style="font-family: monospace; font-size: 11px; color: #334155; line-height: 1.5;">
+            Delivered(A) + Delivered(B) = Total Month Meals<br>
+            Amount(A) + Amount(B) = Full Plan Price
+          </div>
+          <p style="margin: 6px 0 0; font-size: 11px; color: var(--text-muted);">
+            Calculated in integer paise using exact weekday sets. Neither customer pays for the other's days.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
